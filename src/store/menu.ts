@@ -10,6 +10,11 @@ import type { Product, Category, TaxRate } from '../models/types'
 import { filterByAllergens, type AllergenKey, type AllergenFilterResult } from '../modules/allergen'
 import { newId } from '../core/id'
 
+// 异步触发云同步（不阻塞写操作，失败静默）
+function fireSync() {
+  import('../modules/sync/engine').then(({ runSyncEngine }) => runSyncEngine()).catch(() => {})
+}
+
 export const useMenuStore = defineStore('menu', () => {
   const products = ref<Product[]>([])
   const categories = ref<Category[]>([])
@@ -74,6 +79,7 @@ export const useMenuStore = defineStore('menu', () => {
       sort: data.sort ?? 999,
     })
     products.value = await getAll<Product>('products')
+    fireSync()
     return p
   }
 
@@ -83,12 +89,14 @@ export const useMenuStore = defineStore('menu', () => {
     if (!cur) return
     await putRow<Product>('products', { ...cur, ...data, id })
     products.value = await getAll<Product>('products')
+    fireSync()
   }
 
   /** 删除菜品 */
   async function deleteProduct(id: string): Promise<void> {
     await deleteRow('products', id)
     products.value = await getAll<Product>('products')
+    fireSync()
   }
 
   // ---- 分类 ----
@@ -100,6 +108,7 @@ export const useMenuStore = defineStore('menu', () => {
       sort: data.sort ?? 999,
     })
     categories.value = await getAll<Category>('categories')
+    fireSync()
     return c
   }
   async function updateCategory(id: string, data: Partial<Category>): Promise<void> {
@@ -107,10 +116,12 @@ export const useMenuStore = defineStore('menu', () => {
     if (!cur) return
     await putRow<Category>('categories', { ...cur, ...data, id })
     categories.value = await getAll<Category>('categories')
+    fireSync()
   }
   async function deleteCategory(id: string): Promise<void> {
     await deleteRow('categories', id)
     categories.value = await getAll<Category>('categories')
+    fireSync()
   }
 
   // ---- 税率 ----
@@ -122,6 +133,7 @@ export const useMenuStore = defineStore('menu', () => {
       rate: data.rate ?? 0,
     })
     taxRates.value = await getAll<TaxRate>('tax_rates')
+    fireSync()
     return t
   }
   async function updateTaxRate(id: string, data: Partial<TaxRate>): Promise<void> {
@@ -129,10 +141,12 @@ export const useMenuStore = defineStore('menu', () => {
     if (!cur) return
     await putRow<TaxRate>('tax_rates', { ...cur, ...data, id })
     taxRates.value = await getAll<TaxRate>('tax_rates')
+    fireSync()
   }
   async function deleteTaxRate(id: string): Promise<void> {
     await deleteRow('tax_rates', id)
     taxRates.value = await getAll<TaxRate>('tax_rates')
+    fireSync()
   }
 
   return {
