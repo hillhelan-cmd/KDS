@@ -17,6 +17,7 @@ export interface Store extends DbRecord {
   vat_no?: string       // 税号
   phone?: string
   theme?: ThemeKey      // 全局主题（店主在后台切换，顾客端只应用）
+  kds_show_done?: boolean // 后厨屏是否显示"已完成"订单（默认 true）
   // 预留：授权
   license_key?: string  // License 校验入口（预留，M1 不校验）
   licensed?: boolean    // 是否已授权
