@@ -109,6 +109,16 @@ export const useOrdersStore = defineStore('orders', () => {
     return o
   }
 
+  /** 更新支付状态（收银台：pending→paid、paid→refunded、cancel 等） */
+  async function updatePayment(id: string, payment_status: Order['payment_status'], method?: string) {
+    const o = orders.value.find((x) => x.id === id)
+    if (!o) return o
+    o.payment_status = payment_status
+    if (method) o.payment_method = method
+    await putRow<Order>('orders', o as any)
+    return o
+  }
+
   async function getById(id: string): Promise<Order | undefined> {
     return getRow<Order>('orders', id) ?? orders.value.find((o) => o.id === id)
   }
@@ -121,6 +131,6 @@ export const useOrdersStore = defineStore('orders', () => {
 
   return {
     orders, loaded, todayOrders,
-    load, createOrder, updateStatus, getById, nextSeq,
+    load, createOrder, updateStatus, updatePayment, getById, nextSeq,
   }
 })
