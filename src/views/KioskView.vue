@@ -24,9 +24,17 @@ const currentDishes = computed(() => {
 })
 
 // 自增加购（自助机：点了就 +1，可重复点）
+const addNotice = ref('')
+let noticeTimer: number | null = null
+function showAddNotice(msg: string) {
+  addNotice.value = msg
+  if (noticeTimer) clearTimeout(noticeTimer)
+  noticeTimer = window.setTimeout(() => (addNotice.value = ''), 1500)
+}
 function onAdd(p: Product) {
   if (p.opts && p.opts.length > 0) { openOpt(p); return }
   cart.addItem(p, [])
+  showAddNotice(tl({ zh: '✅ 已加入购物车', en: '✅ Added to cart', nl: '✅ Toegevoegd' }))
 }
 function qtyOf(p: Product) { return cart.qty(p, []) }
 
@@ -51,7 +59,7 @@ function pickOpt(opt: any, choice: any) {
   }
   optSelections.value = [...optSelections.value]
 }
-function confirmOpt() { if (optProduct.value) cart.addItem(optProduct.value, []); optModal.value = false }
+function confirmOpt() { if (optProduct.value) cart.addItem(optProduct.value, optSelections.value); optModal.value = false }
 
 // 结算
 const checkoutOpen = ref(false)
@@ -134,10 +142,15 @@ onUnmounted(() => {
       <div class="kiosk-right">
         <span class="lang">🌐 {{ langDisplay }}</span>
         <button class="cart-btn" @click="openCheckout" :disabled="cart.isEmpty">
-          🛒 <b>{{ cart.lineCount }}</b> · €{{ cart.grandTotal.toFixed(2) }}
+          🛒 <b>{{ cart.lineCount }}</b>
         </button>
       </div>
     </header>
+
+    <!-- 加购提示 toast -->
+    <transition name="toast">
+      <div class="kio-toast" v-if="addNotice">{{ addNotice }}</div>
+    </transition>
 
     <!-- 分类横向栏 -->
     <nav class="kiosk-cats">
@@ -333,4 +346,15 @@ onUnmounted(() => {
 .kio-seq { font-size: 20px; color: #8a7a6a; margin: 12px 0 20px; }
 .kio-seq b { font-size: 40px; color: var(--primary); }
 .kio-primary.big { width: 100%; padding: 22px; font-size: 24px; }
+
+/* 加购提示 toast */
+.kio-toast {
+  position: fixed; top: 90px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.78); color: #fff; font-size: 22px; font-weight: 700;
+  padding: 14px 30px; border-radius: 40px; z-index: 200;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.3); pointer-events: none;
+  white-space: nowrap;
+}
+.toast-enter-active, .toast-leave-active { transition: opacity .25s, transform .25s; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translate(-50%, -12px); }
 </style>
