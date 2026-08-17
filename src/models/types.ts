@@ -73,7 +73,7 @@ export interface OrderSource {
 
 // ---- 订单 ----
 export type OrderStatus = 'new' | 'preparing' | 'ready' | 'completed' | 'refunded' | 'canceled'
-export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'canceled' // 预留：支付状态机
+export type PaymentStatus = 'pending' | 'paid' | 'refunded' | 'failed' | 'canceled' // 支付状态机（含退款）
 
 export interface OrderItem {
   product_id: string
