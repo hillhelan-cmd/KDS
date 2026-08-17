@@ -6,6 +6,9 @@ import { useCartStore } from './store/cart'
 import { useOrdersStore } from './store/orders'
 import { useSettingsStore } from './store/settings'
 import { watchNetwork } from './modules/sync/adapter'
+import { setSyncAdapter } from './modules/sync/adapter'
+import { CloudflareSyncAdapter } from './modules/sync/cloudflare'
+import { initCloudSync, runSyncEngine } from './modules/sync/engine'
 import App from './App.vue'
 import './style.css'
 
@@ -33,9 +36,13 @@ async function bootstrap() {
   }
   cart.configureTaxResolver(taxResolver as any)
 
-  // 网络状态监听：M2 触发自动同步（暂只刷新 UI 标识）
-  watchNetwork(() => {
-    // TODO(M2): 网络恢复时触发 runSync()
+  // ---- 云端同步（Cloudflare D1）：注入真实 Adapter + 启动时拉取 ----
+  setSyncAdapter(new CloudflareSyncAdapter())
+  await initCloudSync()
+
+  // 网络状态监听：恢复上线时自动补同步
+  watchNetwork((online) => {
+    if (online) runSyncEngine()
   })
 }
 
