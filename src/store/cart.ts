@@ -13,6 +13,7 @@ export interface CartLine {
   qty: number
   optSelections: { opt: ProductOpt; chosen: { id: string; name: string; delta: number }[] }[]
   unitGross: number  // 含税单价（基础价 + 选项加价）
+  key: string        // 稳定标识：productId + 选项快照（用于跨引用稳定匹配）
 }
 
 export const useCartStore = defineStore('cart', () => {
@@ -32,30 +33,34 @@ export const useCartStore = defineStore('cart', () => {
     return Math.round(g * 100) / 100
   }
 
-  function findLine(productId: string, optKey: string): CartLine | undefined {
-    return lines.value.find((l) => key(l) === optKey && l.product.id === productId)
+  /** 稳定行 key：productId + 各选项已选项快照（排序保证一致性） */
+  function lineKey(productId: string, optSelections: CartLine['optSelections']): string {
+    const parts = optSelections.map((s) => s.opt.id + ':' + s.chosen.map((c) => c.id).sort().join(',')).join('|')
+    return productId + '#' + parts
   }
-  function key(l: CartLine): string {
-    return l.optSelections.map((s) => s.opt.id + ':' + s.chosen.map((c) => c.id).sort().join(',')).join('|')
+
+  function findLineByKey(idKey: string): CartLine | undefined {
+    return lines.value.find((l) => l.key === idKey)
   }
 
   function qty(p: Product, optSelections: CartLine['optSelections']): number {
-    const l = lines.value.find((x) => x.product.id === p.id && x.optSelections === optSelections)
+    const l = findLineByKey(lineKey(p.id, optSelections))
     return l ? l.qty : 0
   }
 
   function addItem(p: Product, optSelections: CartLine['optSelections'] = [], q = 1) {
     const unitGross = calcLineGross(p, optSelections)
-    const existing = findLine(p.id, key({ product: p, qty: 0, optSelections, unitGross }))
+    const k = lineKey(p.id, optSelections)
+    const existing = findLineByKey(k)
     if (existing) {
       existing.qty += q
     } else {
-      lines.value.push({ product: p, qty: q, optSelections, unitGross })
+      lines.value.push({ product: p, qty: q, optSelections, unitGross, key: k })
     }
   }
 
   function removeItem(p: Product, optSelections: CartLine['optSelections'] = [], q = 1) {
-    const idx = lines.value.findIndex((l) => l.product.id === p.id && l.optSelections === optSelections)
+    const idx = lines.value.findIndex((l) => l.key === lineKey(p.id, optSelections))
     if (idx < 0) return
     lines.value[idx].qty -= q
     if (lines.value[idx].qty <= 0) lines.value.splice(idx, 1)
