@@ -147,11 +147,19 @@ const filteredProducts = computed(() => {
 // 新增/编辑弹窗
 const showProductModal = ref(false)
 const editingId = ref<string | null>(null)
+// 菜品选项（Modifiers）表单结构：支持单选/多选（免费/收费）
+interface ModifierFormOpt {
+  id: string
+  type: 'single' | 'multi'
+  nameZh: string; nameEn: string; nameNl: string
+  options: { id: string; nameZh: string; nameEn: string; nameNl: string; delta: number }[]
+}
 const prodForm = ref<{
   nameZh: string; nameEn: string; nameNl: string; price: number;
   cat: string; tax_rate_id: string; img: string; alrg: string;
   allergens: AllergenKey[]; soldout: boolean; descZh: string
-}>({ nameZh: '', nameEn: '', nameNl: '', price: 0, cat: '', tax_rate_id: '', img: '🍽️', alrg: '', allergens: [], soldout: false, descZh: '' })
+  opts: ModifierFormOpt[]
+}>({ nameZh: '', nameEn: '', nameNl: '', price: 0, cat: '', tax_rate_id: '', img: '🍽️', alrg: '', allergens: [], soldout: false, descZh: '', opts: [] })
 
 function openNewProduct() {
   editingId.value = null
@@ -159,6 +167,7 @@ function openNewProduct() {
     nameZh: '', nameEn: '', nameNl: '', price: 0,
     cat: menu.categories[0]?.id || '', tax_rate_id: menu.taxRates[0]?.id || '',
     img: '🍽️', alrg: '', allergens: [], soldout: false, descZh: '',
+    opts: [],
   }
   showProductModal.value = true
 }
@@ -169,6 +178,13 @@ function openEditProduct(p: Product) {
     price: p.price, cat: p.cat || '', tax_rate_id: p.tax_rate_id || '',
     img: p.img || '🍽️', alrg: p.alrg || '', allergens: [...(p.allergens || [])],
     soldout: !!p.soldout, descZh: p.desc?.zh || '',
+    opts: (p.opts || []).map((o) => ({
+      id: o.id, type: o.type as 'single' | 'multi',
+      nameZh: o.name?.zh || '', nameEn: o.name?.en || '', nameNl: o.name?.nl || '',
+      options: (o.options || []).map((x) => ({
+        id: x.id, nameZh: x.name?.zh || '', nameEn: x.name?.en || '', nameNl: x.name?.nl || '', delta: x.delta || 0,
+      })),
+    })),
   }
   showProductModal.value = true
 }
@@ -176,6 +192,20 @@ function toggleAllergenInForm(a: AllergenKey) {
   const i = prodForm.value.allergens.indexOf(a)
   if (i >= 0) prodForm.value.allergens.splice(i, 1)
   else prodForm.value.allergens.push(a)
+}
+
+// ---- Modifiers 编辑器操作 ----
+function addModifierGroup() {
+  prodForm.value.opts.push({ id: crypto.randomUUID(), type: 'single', nameZh: '', nameEn: '', nameNl: '', options: [] })
+}
+function removeModifierGroup(i: number) {
+  prodForm.value.opts.splice(i, 1)
+}
+function addModifierOption(gi: number) {
+  prodForm.value.opts[gi].options.push({ id: crypto.randomUUID(), nameZh: '', nameEn: '', nameNl: '', delta: 0 })
+}
+function removeModifierOption(gi: number, oi: number) {
+  prodForm.value.opts[gi].options.splice(oi, 1)
 }
 async function saveProduct() {
   if (!prodForm.value.nameZh) return notify('请填中文名')
@@ -189,13 +219,28 @@ async function saveProduct() {
     desc: prodForm.value.descZh ? { zh: prodForm.value.descZh } : undefined,
     allergens: prodForm.value.allergens,
     soldout: prodForm.value.soldout,
+    opts: prodForm.value.opts.map((g) => ({
+      id: g.id, type: g.type,
+      name: { zh: g.nameZh, en: g.nameEn || g.nameZh, nl: g.nameNl || g.nameZh },
+      options: g.options.map((x) => ({
+        id: x.id,
+        name: { zh: x.nameZh, en: x.nameEn || x.nameZh, nl: x.nameNl || x.nameZh },
+        delta: Number(x.delta) || 0,
+      })),
+    })),
   }
   saving.value = true
-  if (editingId.value) await menu.updateProduct(editingId.value, data)
-  else await menu.addProduct(data)
-  saving.value = false
-  showProductModal.value = false
-  notify(editingId.value ? '菜品已更新 ✅' : '菜品已新增 ✅')
+  try {
+    if (editingId.value) await menu.updateProduct(editingId.value, data)
+    else await menu.addProduct(data)
+    showProductModal.value = false
+    notify(editingId.value ? '菜品已更新 ✅' : '菜品已新增 ✅')
+  } catch (e) {
+    console.error(e)
+    notify('保存失败：' + ((e as Error)?.message || '未知错误'))
+  } finally {
+    saving.value = false   // 无论成功失败都复位，杜绝按钮卡在"保存中"
+  }
 }
 async function removeProduct(id: string, name: string) {
   if (!confirm(`确定删除「${name}」？此操作不可撤销。`)) return
@@ -466,6 +511,35 @@ function backToCustomer() { window.location.href = '/' }
           <button v-for="a in ALLERGEN_TAGS" :key="a.key" class="chip" :class="{ sel: prodForm.allergens.includes(a.key) }"
             @click="toggleAllergenInForm(a.key)">{{ a.label.zh }}</button>
         </div>
+
+        <!-- Modifiers 选项（单选/多选、免费/收费） -->
+        <div class="mod-sec">
+          <div class="mod-sec-head">
+            <span class="mod-title">🧂 可选配项 (Modifiers)</span>
+            <button class="mini" @click="addModifierGroup">＋ 添加选项组</button>
+          </div>
+          <div v-if="prodForm.opts.length === 0" class="mod-empty">未配置选项（如辣度、加料等）。可添加：单选免费 / 多选收费 / 多选免费。</div>
+          <div v-for="(g, gi) in prodForm.opts" :key="g.id" class="mod-group">
+            <div class="mod-group-head">
+              <input v-model="g.nameZh" class="mg-name" placeholder="选项组名，如：辣度" />
+              <select v-model="g.type" class="mg-type">
+                <option value="single">单选</option>
+                <option value="multi">多选</option>
+              </select>
+              <button class="mini danger" @click="removeModifierGroup(gi)">✖</button>
+            </div>
+            <div class="mod-opts">
+              <div v-for="(x, oi) in g.options" :key="x.id" class="mod-opt">
+                <input v-model="x.nameZh" class="mo-name" placeholder="选项名，如：中辣" />
+                <span class="mo-idx">+€</span>
+                <input v-model.number="x.delta" type="number" step="0.1" min="0" class="mo-delta" placeholder="0=免费" />
+                <button class="mini danger" @click="removeModifierOption(gi, oi)">✖</button>
+              </div>
+              <button class="mini" @click="addModifierOption(gi)">＋ 加价选项</button>
+            </div>
+          </div>
+        </div>
+
         <label class="inline-check"><input type="checkbox" v-model="prodForm.soldout" /> 售罄</label>
         <div class="modal-actions">
           <button class="btn-ghost" @click="showProductModal = false">取消</button>
@@ -670,4 +744,20 @@ function backToCustomer() { window.location.href = '/' }
 .o-detail-amount .tot { font-weight: 800; color: var(--primary); font-size: 15px; }
 .o-detail-tax { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
 .tax-chip { background: var(--primary-soft); color: var(--primary); font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
+/* ---- Modifiers 选项编辑 ---- */
+.mod-sec { margin-top: 16px; border: 1px dashed var(--border); border-radius: 12px; padding: 12px; }
+.mod-sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.mod-title { font-weight: 700; font-size: 14px; }
+.mod-empty { font-size: 12px; color: var(--muted); }
+.mod-group { border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-top: 10px; background: var(--card); }
+.mod-group-head { display: flex; gap: 6px; align-items: center; }
+.mg-name { flex: 1; }
+.mg-type { border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; background: var(--card); }
+.mod-opts { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.mod-opt { display: flex; gap: 6px; align-items: center; }
+.mo-name { flex: 1; }
+.mo-delta { width: 80px; border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; }
+.mo-idx { font-size: 12px; color: var(--muted); }
+.mod-group .mini, .mod-opts .mini { align-self: flex-start; }
+.mod-sec input { font-size: 13px; }
 </style>
