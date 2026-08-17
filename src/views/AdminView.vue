@@ -1,15 +1,19 @@
 <script setup lang="ts">
-// 后台管理 (M2)：商家设置 / 菜单(菜品·分类·税率)管理
+// 后台管理 (M2)：商家设置 / 菜单(菜品·分类·税率)管理 / 收银台(订单)
 import { ref, computed, onMounted } from 'vue'
 import { useMenuStore } from '../store/menu'
 import { useSettingsStore } from '../store/settings'
-import type { Product, Category, TaxRate } from '../models/types'
+import { useOrdersStore } from '../store/orders'
+import type { Product, Category, TaxRate, Order } from '../models/types'
 import { ALLERGEN_TAGS, type AllergenKey } from '../modules/allergen'
+import { tl, lang } from '../i18n'
+import { SOURCES, sourceName } from '../data/sources'
 
 const menu = useMenuStore()
 const settings = useSettingsStore()
+const ordersStore = useOrdersStore()
 
-const tab = ref<'store' | 'products' | 'categories' | 'taxes'>('products')
+const tab = ref<'store' | 'products' | 'categories' | 'taxes' | 'orders'>('orders')
 const loaded = ref(false)
 const saving = ref(false)
 const msg = ref('')
@@ -17,6 +21,7 @@ const msg = ref('')
 onMounted(async () => {
   if (!menu.loaded) await menu.load()
   if (!settings.loaded) await settings.load()
+  if (!ordersStore.loaded) await ordersStore.load()
   const s = settings.store
   if (s) {
     storeForm.value = {
@@ -34,6 +39,83 @@ function notify(s: string) {
   msg.value = s
   setTimeout(() => (msg.value = ''), 2500)
 }
+
+// ============================================================
+// 收银台（订单管理）—— 餐馆老板每日高频核心
+// 打通 "下单 → 标记已付 → 退款/取消 → 对账" 完整商业闭环
+// ============================================================
+const orderFilter = ref<'all' | Order['status']>('all')
+const payFilter = ref<'all' | 'pending' | 'paid' | 'refunded' | 'canceled'>('all')
+const selectedOrder = ref<Order | null>(null)
+const orderDetailOpen = ref(false)
+
+/** 今日 & 全部订单（时间倒序） */
+const allOrders = computed(() => [...ordersStore.orders])
+const filteredOrders = computed(() =>
+  allOrders.value.filter((o) => {
+    if (orderFilter.value !== 'all' && o.status !== orderFilter.value) return false
+    if (payFilter.value !== 'all' && o.payment_status !== payFilter.value) return false
+    return true
+  }),
+)
+
+/** 营业汇总（会计口径） */
+const biz = computed(() => {
+  const today = new Date().toDateString()
+  const t = ordersStore.orders.filter((o) => new Date(o.created_at).toDateString() === today)
+  const paid = t.filter((o) => o.payment_status === 'paid')
+  const revenue = paid.reduce((s, o) => s + (o.grand_total || 0), 0)
+  const tax = paid.reduce((s, o) => s + (o.tax_total || 0), 0)
+  const net = paid.reduce((s, o) => s + (o.net_total || 0), 0)
+  const refunded = t.filter((o) => o.payment_status === 'refunded').reduce((s, o) => s + (o.grand_total || 0), 0)
+  return {
+    todayOrders: t.length,
+    paidOrders: paid.length,
+    revenue: Math.round(revenue * 100) / 100,
+    tax: Math.round(tax * 100) / 100,
+    net: Math.round(net * 100) / 100,
+    refunded: Math.round(refunded * 100) / 100,
+    pending: t.filter((o) => o.payment_status === 'pending').length,
+  }
+})
+
+function fmtTime(ts: number) {
+  const d = new Date(ts)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+function orderSrcIcon(o: Order) { return SOURCES.find((s) => s.key === o.source)?.icon || '🛍️' }
+function rawName(n: Record<string, string> | string): string {
+  return typeof n === 'string' ? n : (n?.[lang.value] || n?.zh || '')
+}
+
+/** 收银动作：标记已收银 */
+async function markPaid(o: Order) {
+  o.payment_status = 'paid'
+  o.payment_method = 'cash'
+  await ordersStore.updateStatus(o.id, o.status) // 刷新持久化
+  await ordersStore.updatePayment?.(o.id, 'paid', 'cash')
+  notify(`#${o.seq} 已收银 ✅（${rawName({ zh: '现金', en: 'Cash', nl: 'Contant' })}）`)
+}
+/** 退款 */
+async function markRefund(o: Order) {
+  await ordersStore.updatePayment?.(o.id, 'refunded', o.payment_method)
+  notify(`#${o.seq} 已退款 ↩️`)
+}
+/** 取消 */
+async function markCancel(o: Order) {
+  await ordersStore.updateStatus(o.id, 'canceled')
+  await ordersStore.updatePayment?.(o.id, 'canceled', o.payment_method)
+  notify(`#${o.seq} 已取消`)
+}
+/** 打开订单详情 */
+function openOrder(o: Order) {
+  selectedOrder.value = o
+  orderDetailOpen.value = true
+}
+const statusText = (s: string) =>
+  ({ new: rawName({ zh: '新单', en: 'New', nl: 'Nieuw' }), preparing: rawName({ zh: '制作中', en: 'Preparing', nl: 'Bezig' }), ready: rawName({ zh: '待取', en: 'Ready', nl: 'Klaar' }), completed: rawName({ zh: '完成', en: 'Done', nl: 'Afgerond' }), refunded: rawName({ zh: '已退款', en: 'Refunded', nl: 'Gecrediteerd' }), canceled: rawName({ zh: '已取消', en: 'Canceled', nl: 'Geannuleerd' }) })[s] || s
+const payText = (s: string) =>
+  ({ pending: rawName({ zh: '待收', en: 'Unpaid', nl: 'Openstaand' }), paid: rawName({ zh: '已收', en: 'Paid', nl: 'Betaald' }), refunded: rawName({ zh: '已退', en: 'Refunded', nl: 'Gecrediteerd' }), canceled: rawName({ zh: '取消', en: 'Canceled', nl: 'Geannuleerd' }), failed: rawName({ zh: '失败', en: 'Failed', nl: 'Mislukt' }) })[s] || s
 
 // ---- 商家设置 ----
 import { THEMES, applyTheme } from '../core/theme'
@@ -181,6 +263,7 @@ function backToCustomer() { window.location.href = '/' }
     </header>
 
     <nav class="admin-tabs">
+      <button :class="{ sel: tab === 'orders' }" @click="tab = 'orders'">📋 收银台</button>
       <button :class="{ sel: tab === 'store' }" @click="tab = 'store'">🏪 店铺</button>
       <button :class="{ sel: tab === 'products' }" @click="tab = 'products'">🍽️ 菜品</button>
       <button :class="{ sel: tab === 'categories' }" @click="tab = 'categories'">🗂️ 分类</button>
