@@ -234,7 +234,7 @@ onUnmounted(() => {
 }
 /* 顶栏 */
 .kiosk-top {
-  background: linear-gradient(135deg, #e5752f, #d35400);
+  background: var(--kiosk-hero, var(--primary));
   color: #fff; padding: 18px 26px;
   display: flex; align-items: center; justify-content: space-between;
 }
@@ -245,7 +245,7 @@ onUnmounted(() => {
 .kiosk-right { display: flex; align-items: center; gap: 16px; }
 .lang { font-size: 17px; background: rgba(255,255,255,.18); padding: 8px 14px; border-radius: 10px; }
 .cart-btn {
-  border: none; background: #fff; color: #e5752f;
+  border: none; background: #fff; color: var(--primary);
   font-size: 20px; font-weight: 700; padding: 14px 24px; border-radius: 14px;
   box-shadow: 0 4px 14px rgba(0,0,0,.2);
 }
@@ -260,7 +260,7 @@ onUnmounted(() => {
   border-radius: 999px; padding: 14px 26px; font-size: 19px; font-weight: 600;
   white-space: nowrap; color: #5a4a3a;
 }
-.kiosk-cats button.sel { background: #e5752f; color: #fff; border-color: #e5752f; }
+.kiosk-cats button.sel { background: var(--primary); color: #fff; border-color: var(--primary); }
 /* 菜品大网格：竖屏自助机用 3 列大格子 */
 .kiosk-grid {
   flex: 1; padding: 24px 26px;
@@ -278,10 +278,10 @@ onUnmounted(() => {
 .kio-dish.off { opacity: .45; }
 .dish-emoji { font-size: 56px; }
 .dish-name { font-size: 20px; font-weight: 700; color: #3a2f24; }
-.dish-price { font-size: 19px; color: #e5752f; font-weight: 800; }
+.dish-price { font-size: 19px; color: var(--primary); font-weight: 800; }
 .qty-chip {
   position: absolute; top: 10px; right: 10px;
-  background: #e5752f; color: #fff; width: 34px; height: 34px; border-radius: 50%;
+  background: var(--primary); color: #fff; width: 34px; height: 34px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800;
 }
 /* 弹窗 */
@@ -301,7 +301,7 @@ onUnmounted(() => {
 }
 .kio-primary {
   flex: 2; padding: 18px; border-radius: 14px; border: none;
-  background: #e5752f; color: #fff; font-size: 20px; font-weight: 800;
+  background: var(--primary); color: #fff; font-size: 20px; font-weight: 800;
 }
 .kio-opt { margin-bottom: 14px; }
 .kio-opt-title { font-size: 17px; font-weight: 600; color: #8a7a6a; margin-bottom: 8px; }
@@ -310,7 +310,7 @@ onUnmounted(() => {
   border: 2px solid #ece3d8; background: #faf7f2; border-radius: 999px;
   padding: 14px 22px; font-size: 18px;
 }
-.kio-opt-chip.sel { background: #fde8d8; border-color: #e5752f; color: #e5752f; font-weight: 700; }
+.kio-opt-chip.sel { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); font-weight: 700; }
 .kio-opt-chip .d { font-size: 14px; opacity: .8; margin-left: 4px; }
 /* 结算 */
 .kio-dine { display: flex; gap: 10px; margin-bottom: 16px; }
@@ -318,7 +318,7 @@ onUnmounted(() => {
   flex: 1; padding: 16px; border-radius: 14px; border: 2px solid #ece3d8;
   background: #faf7f2; font-size: 19px; font-weight: 600;
 }
-.kio-dine button.sel { background: #fde8d8; border-color: #e5752f; color: #e5752f; }
+.kio-dine button.sel { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
 .kio-field { margin-bottom: 14px; }
 .kio-field label { display: block; font-size: 15px; font-weight: 600; margin-bottom: 6px; }
 .kio-field input {
@@ -327,10 +327,10 @@ onUnmounted(() => {
 .kio-amounts { background: #faf7f2; border-radius: 14px; padding: 14px 18px; }
 .kio-row { display: flex; justify-content: space-between; font-size: 16px; padding: 4px 0; color: #8a7a6a; }
 .kio-row.total { border-top: 1px solid #ece3d8; margin-top: 6px; padding-top: 10px; font-size: 18px; color: #3a2f24; }
-.kio-row.total b { font-size: 26px; color: #e5752f; }
+.kio-row.total b { font-size: 26px; color: var(--primary); }
 .kio-done { text-align: center; padding: 10px 0; }
 .ok-big { font-size: 72px; }
 .kio-seq { font-size: 20px; color: #8a7a6a; margin: 12px 0 20px; }
-.kio-seq b { font-size: 40px; color: #e5752f; }
+.kio-seq b { font-size: 40px; color: var(--primary); }
 .kio-primary.big { width: 100%; padding: 22px; font-size: 24px; }
 </style>

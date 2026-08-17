@@ -25,7 +25,7 @@ onMounted(async () => {
     }
   } else {
     await settings.save({})
-    storeForm.value = { name: settings.store?.name || '达三江', theme: 'business' }
+    storeForm.value = { name: settings.store?.name || '达三江', tagline: '', address: '', vat_no: '', phone: '', theme: 'business' }
   }
   loaded.value = true
 })
