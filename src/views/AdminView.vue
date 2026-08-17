@@ -6,8 +6,8 @@ import { useSettingsStore } from '../store/settings'
 import { useOrdersStore } from '../store/orders'
 import type { Product, Category, TaxRate, Order } from '../models/types'
 import { ALLERGEN_TAGS, type AllergenKey } from '../modules/allergen'
-import { tl, lang } from '../i18n'
-import { SOURCES, sourceName } from '../data/sources'
+import { lang } from '../i18n'
+import { SOURCES } from '../data/sources'
 
 const menu = useMenuStore()
 const settings = useSettingsStore()
@@ -274,6 +274,61 @@ function backToCustomer() { window.location.href = '/' }
 
     <div v-if="!loaded" class="card loading">加载中…</div>
 
+    <!-- 📋 收银台（订单管理）-->
+    <div v-else-if="tab === 'orders'" class="orders-tab">
+      <!-- 今日营业汇总 -->
+      <div class="biz-cards">
+        <div class="biz-card rev"><span class="biz-label">今日营收</span><b>€{{ biz.revenue.toFixed(2) }}</b></div>
+        <div class="biz-card"><span class="biz-label">净收入(不含税)</span><b>€{{ biz.net.toFixed(2) }}</b></div>
+        <div class="biz-card"><span class="biz-label">税额</span><b>€{{ biz.tax.toFixed(2) }}</b></div>
+        <div class="biz-card warn"><span class="biz-label">待收单</span><b>{{ biz.pending }}</b></div>
+        <div class="biz-card bad"><span class="biz-label">已退款</span><b>-€{{ biz.refunded.toFixed(2) }}</b></div>
+      </div>
+
+      <!-- 筛选 -->
+      <div class="order-filters">
+        <select v-model="orderFilter" class="filter-sel">
+          <option value="all">全部状态</option>
+          <option value="new">新单</option>
+          <option value="preparing">制作中</option>
+          <option value="ready">待取</option>
+          <option value="completed">完成</option>
+          <option value="canceled">已取消</option>
+        </select>
+        <select v-model="payFilter" class="filter-sel">
+          <option value="all">全部支付</option>
+          <option value="pending">待收</option>
+          <option value="paid">已收</option>
+          <option value="refunded">已退款</option>
+          <option value="canceled">取消</option>
+        </select>
+        <span class="count-chip">{{ filteredOrders.length }} 单</span>
+      </div>
+
+      <!-- 订单列表 -->
+      <div class="order-list" v-if="filteredOrders.length">
+        <div class="order-row" v-for="o in filteredOrders" :key="o.id" @click="openOrder(o)">
+          <div class="o-head">
+            <span class="o-seq">#{{ o.seq }}</span>
+            <span class="o-src">{{ orderSrcIcon(o) }}</span>
+            <span class="o-time">{{ fmtTime(o.created_at) }}</span>
+            <span class="o-status" :class="'pay-' + o.payment_status">{{ payText(o.payment_status) }}</span>
+            <span class="o-status st" :class="'st-' + o.status">{{ statusText(o.status) }}</span>
+          </div>
+          <div class="o-body">
+            <span class="o-items">{{ o.items.map(i => i.name + '×' + i.qty).join('、') }}</span>
+            <span class="o-total">€{{ o.grand_total.toFixed(2) }}</span>
+          </div>
+          <div class="o-actions" @click.stop>
+            <button v-if="o.payment_status === 'pending' && o.status !== 'canceled'" class="act paid" @click="markPaid(o)">💰 收银</button>
+            <button v-if="o.status !== 'canceled' && o.payment_status !== 'refunded'" class="act refund" @click="markRefund(o)">↩️ 退款</button>
+            <button v-if="o.status !== 'canceled'" class="act cancel" @click="markCancel(o)">✖ 取消</button>
+          </div>
+        </div>
+      </div>
+      <div v-else class="card empty">暂无订单</div>
+    </div>
+
     <!-- 店铺设置 -->
     <div v-else-if="tab === 'store'" class="card form-card">
       <h3>店铺信息</h3>
@@ -446,6 +501,43 @@ function backToCustomer() { window.location.href = '/' }
         </div>
       </div>
     </div>
+
+    <!-- 订单详情 -->
+    <div class="modal-mask" v-if="orderDetailOpen && selectedOrder" @click.self="orderDetailOpen = false">
+      <div class="modal">
+        <div class="o-detail-head">
+          <h3>#{{ selectedOrder.seq }} · {{ orderSrcIcon(selectedOrder) }} {{ payText(selectedOrder.payment_status) }}</h3>
+          <span class="o-detail-time">{{ fmtTime(selectedOrder.created_at) }} · {{ statusText(selectedOrder.status) }}</span>
+        </div>
+        <div class="o-detail-table" v-if="selectedOrder.dine_type === 'dinein'">🏠 桌号 {{ selectedOrder.table_no || '—' }}</div>
+        <div class="o-detail-table" v-else-if="selectedOrder.dine_type === 'takeaway'">🥡 取餐号 {{ selectedOrder.table_no || '—' }}</div>
+        <div class="o-detail-addr" v-else>
+          <div>🛵 {{ selectedOrder.address || '—' }}</div>
+          <div>📞 {{ selectedOrder.phone || '—' }}</div>
+        </div>
+        <div class="o-item-list">
+          <div class="o-item-row" v-for="(it, i) in selectedOrder.items" :key="i">
+            <span class="i-name">{{ it.name }}<small v-if="it.opts && it.opts.length"> ({{ it.opts.map(o=>o.name).join(', ') }})</small></span>
+            <span class="i-qty">×{{ it.qty }}</span>
+            <span class="i-price">€{{ (it.unit_price * it.qty).toFixed(2) }}</span>
+          </div>
+        </div>
+        <div class="o-detail-amount">
+          <span>净额</span><b>€{{ (selectedOrder.grand_total - selectedOrder.tax_total).toFixed(2) }}</b>
+          <span>税额</span><b>€{{ selectedOrder.tax_total.toFixed(2) }}</b>
+          <span class="tot">含税总计</span><b class="tot">€{{ selectedOrder.grand_total.toFixed(2) }}</b>
+        </div>
+        <div class="o-detail-tax" v-if="selectedOrder.tax_breakdown && selectedOrder.tax_breakdown.length">
+          <span v-for="tb in selectedOrder.tax_breakdown" :key="tb.rate" class="tax-chip">
+            {{ (tb.rate*100).toFixed(0) }}% · 税 €{{ tb.tax.toFixed(2) }}
+          </span>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-ghost" @click="orderDetailOpen = false">关闭</button>
+          <button v-if="selectedOrder.payment_status === 'pending' && selectedOrder.status !== 'canceled'" class="btn-primary" @click="markPaid(selectedOrder)">💰 收银</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -513,4 +605,69 @@ function backToCustomer() { window.location.href = '/' }
 .theme-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
 @media (max-width: 640px) { .theme-row { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .form-grid { grid-template-columns: 1fr; } }
+
+/* ---- 收银台 ---- */
+.orders-tab { display: flex; flex-direction: column; gap: 12px; }
+.biz-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.biz-card {
+  background: var(--card); border-radius: 14px; box-shadow: var(--shadow);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;
+}
+.biz-card b { font-size: 19px; font-weight: 800; color: var(--text); }
+.biz-card.rev b { color: var(--primary); }
+.biz-card.warn b { color: #e6a700; }
+.biz-card.bad b { color: var(--danger); }
+.biz-label { font-size: 11px; color: var(--muted); font-weight: 600; }
+.order-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.filter-sel {
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 13px;
+  background: var(--card); color: var(--text);
+}
+.count-chip { font-size: 12px; color: var(--muted); }
+.order-list { display: flex; flex-direction: column; gap: 8px; }
+.order-row {
+  background: var(--card); border-radius: 12px; box-shadow: var(--shadow);
+  padding: 12px 14px; cursor: pointer; border-left: 4px solid var(--border);
+  transition: transform .1s ease;
+}
+.order-row:active { transform: scale(.995); }
+.o-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.o-seq { font-weight: 800; font-size: 14px; }
+.o-src { font-size: 15px; }
+.o-time { color: var(--muted); font-size: 12px; }
+.o-status {
+  margin-left: auto; font-size: 11px; font-weight: 700;
+  padding: 2px 8px; border-radius: 20px;
+}
+.o-status.pay-pending { background: #fff4d6; color: #a06d00; }
+.o-status.pay-paid { background: #e2f6e6; color: #1b7a33; }
+.o-status.pay-refunded { background: #ffe1e1; color: #b32727; }
+.o-status.pay-canceled { background: #eee; color: #777; }
+.o-status.st { margin-left: 0; background: #eef; color: #4a4ad0; }
+.o-status.st.st-canceled { background: #eee; color: #777; }
+.o-body { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; gap: 10px; }
+.o-items { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.o-total { font-weight: 800; font-size: 15px; color: var(--primary); flex-shrink: 0; }
+.o-actions { display: flex; gap: 6px; margin-top: 9px; }
+.o-actions .act {
+  border: none; border-radius: 7px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.act.paid { background: var(--ok, #28a745); color: #fff; }
+.act.refund { background: var(--danger-soft, #ffe1e1); color: #b32727; }
+.act.cancel { background: #eee; color: #555; }
+.empty { color: var(--muted); text-align: center; padding: 30px; }
+.o-detail-head { display: flex; flex-direction: column; gap: 2px; }
+.o-detail-time { font-size: 12px; color: var(--muted); }
+.o-detail-table, .o-detail-addr { font-size: 13px; color: var(--text); margin-top: 8px; }
+.o-detail-addr div { margin-top: 2px; }
+.o-item-list { margin-top: 12px; border-top: 1px solid var(--border); }
+.o-item-row { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; align-items: center; }
+.i-name { flex: 1; }
+.i-name small { color: var(--muted); }
+.i-price { font-weight: 700; }
+.o-detail-amount { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; font-size: 13px; }
+.o-detail-amount span { display: flex; justify-content: space-between; }
+.o-detail-amount .tot { font-weight: 800; color: var(--primary); font-size: 15px; }
+.o-detail-tax { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.tax-chip { background: var(--primary-soft); color: var(--primary); font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
 </style>
