@@ -10,6 +10,11 @@ import { getAll, putRow, getRow } from '../core/db'
 import type { Order, OrderItem, SourceKey, Product } from '../models/types'
 import { splitTax } from '../data/taxRates'
 
+// 异步触发云同步（不阻塞写操作，失败静默）
+function fireSync() {
+  import('../modules/sync/engine').then(({ runSyncEngine }) => runSyncEngine()).catch(() => {})
+}
+
 export const useOrdersStore = defineStore('orders', () => {
   const orders = ref<Order[]>([])
   const loaded = ref(false)
@@ -97,6 +102,7 @@ export const useOrdersStore = defineStore('orders', () => {
     }
     const saved = await putRow<Order>('orders', order as any)
     orders.value.unshift(saved)
+    fireSync()
     return saved
   }
 
@@ -106,6 +112,7 @@ export const useOrdersStore = defineStore('orders', () => {
     if (!o) return o
     o.status = status
     await putRow<Order>('orders', o as any)
+    fireSync()
     return o
   }
 
@@ -116,6 +123,7 @@ export const useOrdersStore = defineStore('orders', () => {
     o.payment_status = payment_status
     if (method) o.payment_method = method
     await putRow<Order>('orders', o as any)
+    fireSync()
     return o
   }
 
