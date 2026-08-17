@@ -72,7 +72,7 @@ function pickOpt(opt: ProductOpt, choice: ProductOpt['options'][number]) {
 }
 function confirmOpt() {
   if (!optProduct.value) return
-  cart.addItem(optProduct.value, [])
+  cart.addItem(optProduct.value, optSelections.value)
   optModal.value = false
 }
 
